@@ -2,3 +2,6 @@ Flask
 SQLAlchemy
 python-dotenv
 pyngrok
+psycopg2
+helius
+requests

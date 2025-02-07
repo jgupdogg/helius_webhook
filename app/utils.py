@@ -1,97 +1,84 @@
-# app/utils.py
-import json
+import os
 import logging
+import json
+import requests
 from datetime import datetime
-from sqlalchemy import text
-from app.database import engine
+from sqlalchemy import create_engine, text
+from app.config import Config
 
-def insert_raw_payload(payload):
+def fetch_addresses_from_db():
     """
-    Inserts the raw JSON payload into the helius_hook table.
-    Returns the inserted record's id.
+    Connect to the database and retrieve distinct addresses from the list_whales_top table,
+    using the latest timestamp.
+    Returns a list of addresses.
     """
-    try:
-        with engine.begin() as connection:
-            query = text("""
-                INSERT INTO helius_hook (payload, received_at, processed)
-                VALUES (:payload, :received_at, false)
-                RETURNING id
-            """)
-            result = connection.execute(query,
-                                        payload=json.dumps(payload),
-                                        received_at=datetime.utcnow())
-            inserted_id = result.fetchone()[0]
-            logging.info("Inserted raw payload with id %s", inserted_id)
-            return inserted_id
-    except Exception as e:
-        logging.error("Error inserting raw payload: %s", e)
+    database_url = Config.DATABASE_URL  # Ensure your .env sets DATABASE_URL and Config loads it.
+    engine = create_engine(database_url)
+    with engine.connect() as connection:
+        # Use .mappings() to get dictionary-like rows.
+        result = connection.execute(text("""
+            SELECT DISTINCT owner as address 
+            FROM trader_filtered
+        """))
+        addresses = [row['address'] for row in result.mappings() if row['address']]
+    return addresses
+
+def update_helius_webhook_sdk(new_url):
+    """
+    Updates the Helius webhook using a direct PUT request.
+    It queries the database for a list of addresses to update the "accountAddresses" field.
+    
+    Required environment variables:
+      - HELIUS_API_KEY: Your Helius API key.
+      - HELIUS_WEBHOOK_ID: The webhook ID to update.
+      - HELIUS_TRANSACTION_TYPES: (Optional) Comma-separated list (default: "SWAP").
+      - HELIUS_WEBHOOK_TYPE: (Optional, default: "enhanced").
+      - HELIUS_TXN_STATUS: (Optional, default: "all").
+      - HELIUS_AUTH_HEADER: (Optional).
+    """
+    api_key = os.getenv("HELIUS_API_KEY")
+    if not api_key:
+        logging.error("HELIUS_API_KEY is not set.")
         return None
 
-def transform_payload(payload):
-    """
-    Transforms the raw payload (a list of transactions) into a structured dictionary.
-    """
-    logging.info("Transforming payload: %s", payload)
-    if not payload or not isinstance(payload, list):
-        logging.warning("Payload is empty or not a list.")
-        return None
+    # Get the webhook ID (or use default)
+    webhook_id = os.getenv("HELIUS_WEBHOOK_ID", "ffefd52b-6be0-4724-8743-2a72c78fed78")
 
-    tx = payload[0]  # Process the first transaction
-    token_transfers = tx.get("tokenTransfers", [])
-    if not token_transfers:
-        logging.warning("No tokenTransfers found in transaction.")
-        return None
+    # Prepare transaction types; default to "SWAP" if not provided.
+    transaction_types_env = os.getenv("HELIUS_TRANSACTION_TYPES", "SWAP")
+    transaction_types = [x.strip() for x in transaction_types_env.split(",")] if transaction_types_env else ["SWAP"]
 
-    first_tt = token_transfers[0]
-    last_tt = token_transfers[-1]
-    ts = tx.get("timestamp")
-    ts_str = datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S") if ts else None
+    # Fetch addresses from the database.
+    account_addresses = fetch_addresses_from_db()
+    logging.debug("Fetched addresses from DB: %s", account_addresses)
+    
+    # Other optional parameters.
+    webhook_type = os.getenv("HELIUS_WEBHOOK_TYPE", "enhanced")
+    auth_header = os.getenv("HELIUS_AUTH_HEADER", "")
 
-    formatted = {
-        "user_address": first_tt.get("fromUserAccount"),
-        "swapfromtoken": first_tt.get("mint"),
-        "swapfromamount": first_tt.get("tokenAmount"),
-        "swaptotoken": last_tt.get("mint"),
-        "swaptotoamount": last_tt.get("tokenAmount"),
-        "signature": tx.get("signature"),
-        "source": tx.get("source"),
-        "timestamp": ts_str
+    # Build the API URL and payload.
+    url_api = f"https://api.helius.xyz/v0/webhooks/{webhook_id}?api-key={api_key}"
+    payload = {
+        "webhookURL": new_url,
+        "transactionTypes": transaction_types,
+        "accountAddresses": account_addresses,
+        "webhookType": webhook_type,
+        "authHeader": auth_header
     }
-    return formatted
 
-def upsert_transaction(formatted_data):
-    """
-    Upserts the transformed transaction into the helius_txns_clean table.
-    """
-    try:
-        with engine.begin() as connection:
-            query = text("""
-                INSERT INTO helius_txns_clean 
-                    (raw_id, user_address, swapfromtoken, swapfromamount, swaptotoken, swaptotoamount, signature, source, timestamp)
-                VALUES (:raw_id, :user_address, :swapfromtoken, :swapfromamount, :swaptotoken, :swaptotoamount, :signature, :source, :timestamp)
-                ON CONFLICT (signature) DO UPDATE
-                SET raw_id = EXCLUDED.raw_id,
-                    user_address = EXCLUDED.user_address,
-                    swapfromtoken = EXCLUDED.swapfromtoken,
-                    swapfromamount = EXCLUDED.swapfromamount,
-                    swaptotoken = EXCLUDED.swaptotoken,
-                    swaptotoamount = EXCLUDED.swaptotoamount,
-                    source = EXCLUDED.source,
-                    timestamp = EXCLUDED.timestamp;
-            """)
-            connection.execute(query, **formatted_data)
-            logging.info("Upserted transaction with signature: %s", formatted_data.get("signature"))
-    except Exception as e:
-        logging.error("Error upserting transaction: %s", e)
+    logging.debug("Sending payload to Helius: %s", payload)
+    headers = {"Content-Type": "application/json"}
 
-def mark_raw_as_processed(raw_id):
-    """
-    Marks the raw payload as processed.
-    """
     try:
-        with engine.begin() as connection:
-            query = text("UPDATE helius_hook SET processed = true WHERE id = :id")
-            connection.execute(query, id=raw_id)
-            logging.info("Marked raw payload id %s as processed.", raw_id)
+        response = requests.put(url_api, headers=headers, data=json.dumps(payload))
+        if response.status_code == 200:
+            logging.info("Successfully updated Helius webhook.")
+            data = response.json()
+            logging.debug("Response data: %s", data)
+            return data
+        else:
+            logging.error("Failed to update webhook. Status code: %s, response: %s", response.status_code, response.text)
+            return None
     except Exception as e:
-        logging.error("Error marking raw payload id %s as processed: %s", raw_id, e)
+        logging.error("Exception while updating Helius webhook: %s", e)
+        return None
