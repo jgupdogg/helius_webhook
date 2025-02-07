@@ -44,7 +44,6 @@ def transform_payload(payload):
     """
     Transform the raw payload (assumed to be a list of transactions) into a dictionary with expected keys.
     """
-    logging.info("Transforming payload: %s", payload)
     if not payload or not isinstance(payload, list):
         logging.warning("Payload is empty or not a list.")
         return None
@@ -115,7 +114,6 @@ def mark_raw_as_processed(raw_id):
         with engine.begin() as connection:
             query = text("UPDATE helius_hook SET processed = true WHERE id = :id")
             connection.execute(query, {"id": raw_id})
-            logging.info("Marked raw payload id %s as processed.", raw_id)
     except SQLAlchemyError as e:
         logging.error("Error marking raw payload id %s as processed: %s", raw_id, e)
 
@@ -133,7 +131,7 @@ def webhook_listener():
     if payload is None:
         return jsonify({"error": "Invalid payload"}), 400
 
-    logging.info("Received webhook payload: %s", payload)
+    logging.info("Received webhook payload")
     raw_id = insert_raw_payload(payload)
     if raw_id is None:
         return jsonify({"error": "Failed to store raw payload"}), 500
