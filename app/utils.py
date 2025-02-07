@@ -4,7 +4,7 @@ import json
 import requests
 from datetime import datetime
 from sqlalchemy import create_engine, text
-from app.config import Config
+from config import Config
 
 def fetch_addresses_from_db():
     """

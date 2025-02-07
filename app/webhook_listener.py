@@ -2,8 +2,8 @@ import os
 import logging
 from flask import Flask, request, jsonify
 from pyngrok import ngrok, conf
-from app.config import Config
-from app.utils import (
+from config import Config
+from utils import (
     update_helius_webhook_sdk
 )
 
@@ -20,7 +20,7 @@ def insert_raw_payload(payload):
     from sqlalchemy.exc import SQLAlchemyError
     from datetime import datetime
     import json
-    from app.config import Config
+    from config import Config
     from sqlalchemy import create_engine, text
     # Create engine using the database URL from Config.
     engine = create_engine(Config.DATABASE_URL, echo=False)
@@ -44,7 +44,7 @@ def transform_payload(payload):
     """
     Transform the raw payload (assumed to be a list of transactions) into a dictionary with expected keys.
     """
-    logging.info("Transforming payload")
+    logging.info("Transforming payload: %s", payload)
     if not payload or not isinstance(payload, list):
         logging.warning("Payload is empty or not a list.")
         return None
@@ -80,7 +80,7 @@ def upsert_transaction(formatted_data):
     """
     from sqlalchemy.exc import SQLAlchemyError
     from sqlalchemy import create_engine, text
-    from app.config import Config
+    from config import Config
     engine = create_engine(Config.DATABASE_URL, echo=False)
     try:
         with engine.begin() as connection:
@@ -109,7 +109,7 @@ def mark_raw_as_processed(raw_id):
     """
     from sqlalchemy.exc import SQLAlchemyError
     from sqlalchemy import create_engine, text
-    from app.config import Config
+    from config import Config
     engine = create_engine(Config.DATABASE_URL, echo=False)
     try:
         with engine.begin() as connection:
@@ -133,7 +133,7 @@ def webhook_listener():
     if payload is None:
         return jsonify({"error": "Invalid payload"}), 400
 
-    logging.info("Received webhook payload")
+    logging.info("Received webhook payload: %s", payload)
     raw_id = insert_raw_payload(payload)
     if raw_id is None:
         return jsonify({"error": "Failed to store raw payload"}), 500
