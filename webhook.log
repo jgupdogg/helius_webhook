@@ -1,0 +1,11 @@
+ * Serving Flask app 'app.webhook_listener:app'
+ * Debug mode: off
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.0.156:5000
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug:127.0.0.1 - - [06/Feb/2025 22:52:03] "[33mGET / HTTP/1.1[0m" 404 -
+INFO:root:Received webhook payload: [{'tokenTransfers': [{'fromUserAccount': 'test_user', 'mint': 'ABC', 'tokenAmount': 10}, {'mint': 'XYZ', 'tokenAmount': 20}], 'timestamp': 1675710123, 'signature': 'test_signature', 'source': 'test_source'}]
+ERROR:root:Error inserting raw payload: Connection.execute() got an unexpected keyword argument 'payload'
+INFO:werkzeug:127.0.0.1 - - [06/Feb/2025 22:58:35] "[35m[1mPOST /webhooks HTTP/1.1[0m" 500 -
