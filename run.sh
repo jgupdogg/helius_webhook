@@ -1,6 +1,9 @@
 #!/bin/bash
 # run.sh - Script to run the webhook listener in the background
 
+# Clear any process running on port 5000
+sudo fuser -k 5000/tcp
+
 # Load environment variables from .env if it exists
 if [ -f .env ]; then
     export $(grep -v '^#' .env | xargs)
