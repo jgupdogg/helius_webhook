@@ -42,7 +42,7 @@ def update_helius_webhook_sdk(new_url):
         return None
 
     # Get the webhook ID (or use default)
-    webhook_id = os.getenv("HELIUS_WEBHOOK_ID", "ffefd52b-6be0-4724-8743-2a72c78fed78")
+    webhook_id = os.getenv("HELIUS_WEBHOOK_ID")
 
     # Prepare transaction types; default to "SWAP" if not provided.
     transaction_types_env = os.getenv("HELIUS_TRANSACTION_TYPES", "SWAP")

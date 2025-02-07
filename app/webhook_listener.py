@@ -44,7 +44,7 @@ def transform_payload(payload):
     """
     Transform the raw payload (assumed to be a list of transactions) into a dictionary with expected keys.
     """
-    logging.info("Transforming payload: %s", payload)
+    logging.info("Transforming payload")
     if not payload or not isinstance(payload, list):
         logging.warning("Payload is empty or not a list.")
         return None
@@ -133,7 +133,7 @@ def webhook_listener():
     if payload is None:
         return jsonify({"error": "Invalid payload"}), 400
 
-    logging.info("Received webhook payload: %s", payload)
+    logging.info("Received webhook payload")
     raw_id = insert_raw_payload(payload)
     if raw_id is None:
         return jsonify({"error": "Failed to store raw payload"}), 500
