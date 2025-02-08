@@ -91,7 +91,6 @@ def create_webhook(new_url, addresses):
         "authHeader": auth_header
     }
     headers = {"Content-Type": "application/json"}
-    logging.debug("Creating webhook with payload: %s", payload)
     try:
         response = requests.post(url, headers=headers, data=json.dumps(payload))
         if response.status_code == 200:
@@ -130,7 +129,6 @@ def update_webhook(webhook_id, new_url, addresses):
         "authHeader": auth_header
     }
     headers = {"Content-Type": "application/json"}
-    logging.debug("Updating webhook with payload: %s", payload)
     try:
         response = requests.put(url, headers=headers, data=json.dumps(payload))
         if response.status_code == 200:
@@ -159,12 +157,51 @@ def update_or_create_webhook(new_url):
         if webhook_id:
             logging.info("Updating existing webhook with ID: %s", webhook_id)
             result = update_webhook(webhook_id, new_url, addresses)
+            logging.info("Webhook update result: %s", result)
         else:
             logging.error("Existing webhook found but no webhookID; creating a new webhook.")
             result = create_webhook(new_url, addresses)
+            logging.info("Webhook creation result: %s", result)
     else:
         logging.info("No existing webhook found; creating a new webhook.")
         result = create_webhook(new_url, addresses)
+        logging.info("Webhook creation result: %s", result)
+
+# ------------------------------------------------------------------
+# Raw payload upsert: Insert raw webhook payload into helius_hook table.
+# ------------------------------------------------------------------
+def insert_raw_payload(payload):
+    """
+    Inserts the raw JSON payload into the helius_hook table.
+    Assumes the table 'helius_hook' exists with columns:
+      - id (primary key)
+      - payload (text)
+      - received_at (timestamp)
+      - processed (boolean)
+    """
+    from datetime import datetime
+    database_url = os.getenv("DATABASE_URL")
+    if not database_url:
+        logging.error("DATABASE_URL is not set.")
+        return None
+    engine = create_engine(database_url)
+    try:
+        with engine.begin() as connection:
+            query = text("""
+                INSERT INTO helius_hook (payload, received_at, processed)
+                VALUES (:payload, :received_at, false)
+                RETURNING id
+            """)
+            result = connection.execute(query, {
+                "payload": json.dumps(payload),
+                "received_at": datetime.utcnow()
+            })
+            inserted_id = result.fetchone()[0]
+            logging.info("Inserted raw payload with id %s", inserted_id)
+            return inserted_id
+    except SQLAlchemyError as e:
+        logging.error("Error inserting raw payload: %s", e)
+        return None
 
 # ------------------------------------------------------------------
 # Flask listener: This endpoint receives incoming webhook calls.
@@ -172,8 +209,23 @@ def update_or_create_webhook(new_url):
 @app.route('/webhooks', methods=['POST'])
 def webhook_listener():
     payload = request.get_json()
-    logging.info("Received webhook payload : %s", payload[0]['accountData'][0]['account'])
-    return jsonify({"status": "success"}), 200
+    logging.info("Received webhook payload")
+    raw_id = insert_raw_payload(payload)
+    if raw_id is None:
+        return jsonify({"error": "Failed to insert raw payload"}), 500
+    return jsonify({"status": "success", "raw_id": raw_id}), 200
+
+# ------------------------------------------------------------------
+# Ngrok helper: Setup a tunnel.
+# ------------------------------------------------------------------
+def setup_ngrok():
+    port = os.getenv("PORT", "5000")
+    from pyngrok import ngrok, conf
+    conf.get_default().log_event_callback = lambda log: logging.debug("ngrok log: %s", log)
+    tunnel = ngrok.connect(port, bind_tls=True)
+    public_url = tunnel.public_url
+    logging.info("ngrok tunnel established: %s", public_url)
+    return public_url
 
 # ------------------------------------------------------------------
 # Main: Update (or create) the webhook, then start the Flask listener.

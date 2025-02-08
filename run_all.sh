@@ -1,6 +1,6 @@
 #!/bin/bash
 # run_all.sh
-# Make sure this file is executable: chmod +x run_all.sh
+# Ensure this file is executable: chmod +x run_all.sh
 
 # Check if ngrok is running on port 4040; if not, start it for port 5000.
 if ! lsof -i:4040 >/dev/null 2>&1; then
@@ -20,5 +20,5 @@ fi
 export NEW_WEBHOOK_URL="${NGROK_URL}/webhooks"
 echo "New webhook URL is: ${NEW_WEBHOOK_URL}"
 
-# Run the Python app (which updates the webhook and then starts the Flask listener)
+# Run the integrated Python app (which updates the webhook and then starts the listener)
 python app.py
