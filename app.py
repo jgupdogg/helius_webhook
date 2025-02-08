@@ -33,7 +33,7 @@ def fetch_addresses_from_db():
                 text("SELECT DISTINCT owner AS address FROM trader_filtered")
             ).mappings()
             addresses = [row["address"] for row in result if row["address"]]
-            logging.info("Fetched addresses from DB: %s", addresses)
+            logging.info("Fetched addresses from DB: %s", len(addresses))
             return addresses
     except SQLAlchemyError as e:
         logging.error("Error fetching addresses: %s", e)
@@ -159,15 +159,12 @@ def update_or_create_webhook(new_url):
         if webhook_id:
             logging.info("Updating existing webhook with ID: %s", webhook_id)
             result = update_webhook(webhook_id, new_url, addresses)
-            logging.info("Webhook update result: %s", result)
         else:
             logging.error("Existing webhook found but no webhookID; creating a new webhook.")
             result = create_webhook(new_url, addresses)
-            logging.info("Webhook creation result: %s", result)
     else:
         logging.info("No existing webhook found; creating a new webhook.")
         result = create_webhook(new_url, addresses)
-        logging.info("Webhook creation result: %s", result)
 
 # ------------------------------------------------------------------
 # Flask listener: This endpoint receives incoming webhook calls.
@@ -175,7 +172,7 @@ def update_or_create_webhook(new_url):
 @app.route('/webhooks', methods=['POST'])
 def webhook_listener():
     payload = request.get_json()
-    logging.info("Received webhook payload: %s", payload)
+    logging.info("Received webhook payload : %s", payload[0]['accountData'][0]['account'])
     return jsonify({"status": "success"}), 200
 
 # ------------------------------------------------------------------
