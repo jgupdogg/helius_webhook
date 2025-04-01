@@ -19,7 +19,6 @@ from helius_api import update_or_create_webhook
 @app.route('/webhooks', methods=['POST'])
 def webhook_listener():
     payload = request.get_json()
-    logging.info("Received webhook payload")
     raw_id = insert_raw_payload(payload)
     if raw_id is None:
         return jsonify({"error": "Failed to insert raw payload"}), 500

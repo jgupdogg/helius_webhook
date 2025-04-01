@@ -12,7 +12,7 @@ def trigger_helius_dag(conf={}):
     """
     Triggers the Airflow DAG by calling its REST API endpoint.
     """
-    dag_run_endpoint = "http://localhost:8080/api/v1/dags/transform_and_insert_helius_txns_clean_dag/dagRuns"
+    dag_run_endpoint = "http://localhost:8080/api/v1/dags/helius_webhook_notification_dag/dagRuns"
     airflow_username = os.getenv("AIRFLOW_USERNAME", "admin")
     airflow_password = os.getenv("AIRFLOW_PASSWORD", "password")
     
@@ -38,7 +38,7 @@ def trigger_helius_dag(conf={}):
             auth=HTTPBasicAuth(airflow_username, airflow_password),
         )
         if response.status_code in [200, 201]:
-            logging.info("Successfully triggered Airflow DAG: %s", response.json())
+            logging.info("Successfully triggered Airflow DAG")
         else:
             logging.error("Failed to trigger Airflow DAG. Status code: %s, response: %s",
                           response.status_code, response.text)
